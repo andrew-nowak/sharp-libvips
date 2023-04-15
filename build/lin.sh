@@ -9,6 +9,7 @@ case ${PLATFORM} in
     TARGET=/target
     PACKAGE=/packaging
     ROOT=/root
+    VIPS_C_DEP=libvips.so.42
     VIPS_CPP_DEP=libvips-cpp.so.42
     ;;
   darwin*)
@@ -17,12 +18,13 @@ case ${PLATFORM} in
     TARGET=$PWD/target
     PACKAGE=$PWD
     ROOT=$PWD/$PLATFORM
+    VIPS_C_DEP=libvips.42.dylib
     VIPS_CPP_DEP=libvips-cpp.42.dylib
     ;;
 esac
 
 mkdir ${DEPS}
-mkdir ${TARGET}
+mkdir -p ${TARGET}
 
 # Default optimisation level is for binary size (-Os)
 # Overriden to performance (-O3) for select dependencies that benefit
@@ -430,8 +432,8 @@ mkdir ${DEPS}/vips
 $CURL https://github.com/libvips/libvips/releases/download/v${VERSION_VIPS}/vips-$(without_prerelease $VERSION_VIPS).tar.xz | tar xJC ${DEPS}/vips --strip-components=1
 cd ${DEPS}/vips
 # Link libvips.so.42 statically into libvips-cpp.so.42
-sed -i'.bak' "s/library('vips'/static_&/" libvips/meson.build
-sed -i'.bak' "/version: library_version/{N;d;}" libvips/meson.build
+#sed -i'.bak' "s/library('vips'/static_&/" libvips/meson.build
+#sed -i'.bak' "/version: library_version/{N;d;}" libvips/meson.build
 if [ "$LINUX" = true ]; then
   # Ensure libvips-cpp.so.42 is linked with -z nodelete
   sed -i'.bak' "/gnu_symbol_visibility: 'hidden',/a link_args: nodelete_link_args," cplusplus/meson.build
@@ -451,7 +453,7 @@ CFLAGS="${CFLAGS} -O3" CXXFLAGS="${CXXFLAGS} -O3" meson setup _build --default-l
   -Ddeprecated=false -Dintrospection=false -Dmodules=disabled -Dcfitsio=disabled -Dfftw=disabled -Djpeg-xl=disabled \
   -Dmagick=disabled -Dmatio=disabled -Dnifti=disabled -Dopenexr=disabled -Dopenjpeg=disabled -Dopenslide=disabled \
   -Dpdfium=disabled -Dpoppler=disabled -Dquantizr=disabled -Dgsf=disabled \
-  -Dppm=false -Danalyze=false -Dradiance=false \
+  -Dppm=false -Danalyze=false -Dradiance=false -Dcplusplus=false \
   ${LINUX:+-Dcpp_link_args="$LDFLAGS -Wl,-Bsymbolic-functions -Wl,--version-script=$DEPS/vips/vips.map $EXCLUDE_LIBS"}
 meson install -C _build --tag runtime,devel
 
@@ -499,9 +501,10 @@ function copydeps {
 cd ${TARGET}/lib
 if [ "$LINUX" = true ]; then
   # Check that we really linked with -z nodelete
-  readelf -Wd ${VIPS_CPP_DEP} | grep -qF NODELETE || (echo "$VIPS_CPP_DEP was not linked with -z nodelete" && exit 1)
+  #readelf -Wd ${VIPS_CPP_DEP} | grep -qF NODELETE || (echo "$VIPS_CPP_DEP was not linked with -z nodelete" && exit 1)
+  readelf -Wd ${VIPS_C_DEP} | grep -qF NODELETE || (echo "$VIPS_C_DEP was not linked with -z nodelete" && exit 1)
 fi
-copydeps ${VIPS_CPP_DEP} ${TARGET}/lib-filtered
+copydeps ${VIPS_C_DEP} ${TARGET}/lib-filtered
 
 # Create JSON file of version numbers
 cd ${TARGET}
